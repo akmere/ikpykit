@@ -129,6 +129,13 @@ class IsoKernel(TransformerMixin, BaseEstimator):
             self.iso_kernel_ = IK_INNE(
                 self.n_estimators, self.max_samples_, self.random_state
             )
+        elif self.method == "inne-inclusive":
+            self.iso_kernel_ = IK_INNE(
+                self.n_estimators,
+                self.max_samples_,
+                self.random_state,
+                overlapping=True,
+            )
         elif self.method == "iforest":
             self.iso_kernel_ = IK_IForest(
                 self.n_estimators, self.max_samples_, self.random_state

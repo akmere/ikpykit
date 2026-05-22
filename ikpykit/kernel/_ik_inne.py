@@ -11,7 +11,7 @@ work. If not, see <https://creativecommons.org/licenses/by-nc-nd/4.0/>.
 import numpy as np
 from scipy import sparse
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.metrics import pairwise_distances_argmin_min
+from sklearn.metrics import pairwise_distances, pairwise_distances_argmin_min
 from sklearn.metrics._pairwise_distances_reduction import ArgKmin
 from sklearn.utils import check_array
 from sklearn.utils.validation import check_is_fitted, check_random_state
@@ -55,7 +55,7 @@ class IK_INNE(TransformerMixin, BaseEstimator):
     In Proceedings of the AAAI Conference on Artificial Intelligence, Vol. 33, 2019, July, pp. 4755-4762
     """
 
-    def __init__(self, n_estimators, max_samples, random_state=None):
+    def __init__(self, n_estimators, max_samples, random_state=None, overlapping=False):
         self.n_estimators = n_estimators
         self.max_samples = max_samples
         self.random_state = random_state
@@ -63,6 +63,7 @@ class IK_INNE(TransformerMixin, BaseEstimator):
         self._seeds = None
         self._radius = None
         self._centroids = None
+        self.inclusive = overlapping
 
     def fit(self, X, y=None):
         """Fit the model on data X.
@@ -119,15 +120,22 @@ class IK_INNE(TransformerMixin, BaseEstimator):
         n, _m = X.shape
         embedding = None
         for i in range(self.n_estimators):
-            nearest_index, nearest_values = pairwise_distances_argmin_min(
-                X, self._centroids[i], metric="euclidean", axis=1
-            )
-            # filter out of ball
-            out_index = np.array(range(n))[
-                nearest_values > self._radius[i][nearest_index]
-            ]
-            ik_value = np.eye(self.max_samples)[nearest_index]
-            ik_value[out_index] = 0
+            if self.inclusive:
+                # Mark all hyperspheres that contain each point.
+                distances = pairwise_distances(
+                    X, self._centroids[i], metric="euclidean"
+                )
+                ik_value = (distances <= self._radius[i]).astype(float)
+            else:
+                nearest_index, nearest_values = pairwise_distances_argmin_min(
+                    X, self._centroids[i], metric="euclidean", axis=1
+                )
+                # Filter points outside their nearest hypersphere.
+                out_index = np.arange(n)[
+                    nearest_values > self._radius[i][nearest_index]
+                ]
+                ik_value = np.eye(self.max_samples_)[nearest_index]
+                ik_value[out_index] = 0
 
             ik_value_sparse = sparse.csr_matrix(ik_value)
             if embedding is None:
